@@ -1,9 +1,10 @@
 {
-  "domain": "form4",
-  "name": "Form4 3D Printer",
+  "domain": "formlab",
+  "name": "Form4 sdffsdsdfdfsfssdf 3D Printer",
   "documentation": "https://example.com",
   "requirements": ["requests"],
   "dependencies": [],
   "codeowners": ["@votre_nom_d_utilisateur"],
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "config_flow": false
 }

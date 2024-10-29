@@ -1,7 +1,10 @@
 import logging
 import requests
-from datetime import timedelta, datetime
+from datetime import timedelta
+from datetime import datetime
+
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import UnitOfTemperature
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.entity import async_generate_entity_id
 
@@ -20,33 +23,34 @@ _LOGGER = logging.getLogger(__name__)
 def auth_printer():
     global TOKEN
     global EXPIRES
-    global AUTH_TIME
 
-    headers = {"content-type": "application/x-www-form-urlencoded"}
-    data = {"grant_type": "client_credentials", "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}
-    
+    headers = { "content-type": "application/x-www-form-urlencoded" }
+    data = { "grant_type": "client_credentials", "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET }
     response = requests.post(AUTH_URL, headers=headers, data=data)
     
     if response.status_code == 200:
         json_data = response.json()
+
         TOKEN = json_data.get("access_token")
         EXPIRES = json_data.get("expires_in")
-        AUTH_TIME = datetime.now()  # Met à jour le temps d'authentification
     else:
-        _LOGGER.error("Échec de la requête d'authentification: %s", response.text)
+        print("Échec de la requête:", response.status_code, response.text)
 
+# Fonction simulée pour obtenir des données de l'API
 def get_printer_data():
     try:
-        headers = {"content-type": "application/x-www-form-urlencoded", "Authorization": "Bearer " + TOKEN}
+
+        headers = {"content-type": "application/x-www-form-urlencoded","Authorization": "Bearer " + TOKEN }
         response = requests.get(GET_URL, headers=headers)
 
         if response.status_code == 200:
+            print(response.json())
             return response.json()
         else:
-            _LOGGER.error("Échec de la requête de données d'imprimante: %s", response.text)
+            print("Échec de la requête:", response.status_code, response.text)
 
     except requests.exceptions.RequestException as e:
-        _LOGGER.error("Erreur de requête: %s", e)
+        _LOGGER.error(f"Erreur de requête: {e}")
         return None
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
@@ -73,22 +77,27 @@ class Form4PrinterSensor(SensorEntity):
         return self._attributes
 
     async def async_update(self):
-        # Vérifie si le token est vide ou s'il est expiré
-        if not TOKEN or datetime.now() >= (AUTH_TIME + timedelta(seconds=EXPIRES - 60)):
-            await self.hass.async_add_executor_job(auth_printer)  # Authentification asynchrone
 
-        data = await self.hass.async_add_executor_job(get_printer_data)  # Appel de données asynchrone
-        if data:
-            self._state = data[0]["printer_status"]["status"]
-            self._attributes = {
-                "serial": data[0]["serial"],
-                "alias": data[0]["alias"],
-                "current_temperature": data[0]["printer_status"]["current_temperature"],
-                # "material": data[0]["current_print_run"]["material"],
-                # "volume_ml": data[0]["current_print_run"]["volume_ml"],
-                # "layer_count": data[0]["current_print_run"]["layer_count"],
-                # "user": data[0]["current_print_run"]["user"]["username"]
-            }
+        while TOKEN == "":
+
+            if TOKEN != "":
+                if datetime.now() >= (AUTH_TIME + timedelta(milliseconds=(EXPIRES - 6000))):
+                    auth_printer()
+            else:
+                auth_printer()
+
+        data = get_printer_data()
+        self._state = data[0]["printer_status"]["status"]
+        self._attributes = {
+            "serial": data[0]["serial"],
+            "alias": data[0]["alias"],
+            "current_temperature": data[0]["printer_status"]["current_temperature"],
+            "status": data[0]["printer_status"]
+            #"material": data[0]["current_print_run"]["material"],
+            #"volume_ml": data[0]["current_print_run"]["volume_ml"],
+            #"layer_count": data[0]["current_print_run"]["layer_count"],
+            #"user": data[0]["current_print_run"]["user"]["username"]
+        }
 
     async def async_added_to_hass(self):
         self._unsub = async_track_time_interval(
