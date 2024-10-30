@@ -80,15 +80,7 @@ class Form4PrinterSensor(SensorEntity):
         data = await self.hass.async_add_executor_job(get_printer_data)  # Appel de données asynchrone
         if data:
             self._state = data[0]["printer_status"]["status"]
-            self._attributes = {
-                "serial": data[0]["serial"],
-                "alias": data[0]["alias"],
-                "current_temperature": data[0]["printer_status"]["current_temperature"],
-                # "material": data[0]["current_print_run"]["material"],
-                # "volume_ml": data[0]["current_print_run"]["volume_ml"],
-                # "layer_count": data[0]["current_print_run"]["layer_count"],
-                # "user": data[0]["current_print_run"]["user"]["username"]
-            }
+            self._attributes = data[0]
 
     async def async_added_to_hass(self):
         self._unsub = async_track_time_interval(

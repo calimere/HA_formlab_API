@@ -64,15 +64,7 @@ class Form4PrinterSensor:
         data = get_printer_data()
         if data:
             self._state = data[0]["printer_status"]["status"]
-            self._attributes = {
-                "serial": data[0]["serial"],
-                "alias": data[0]["alias"],
-                "material": data[0]["current_print_run"]["material"],
-                "volume_ml": data[0]["current_print_run"]["volume_ml"],
-                "layer_count": data[0]["current_print_run"]["layer_count"],
-                "current_temperature": data[0]["printer_status"]["current_temperature"],
-                "user": data[0]["current_print_run"]["user"]["username"]
-            }
+            self._attributes = data[0]
             self.display_state()
 
     def display_state(self):
