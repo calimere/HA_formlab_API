@@ -81,6 +81,33 @@ class Form4PrinterSensor(SensorEntity):
         if data:
             self._state = data[0]["printer_status"]["status"]
             self._attributes = data[0]
+            #   self._attributes = {
+            #       "serial": data[0]["serial"],
+            #       "alias": data[0]["alias"],
+            #       "current_temperature": data[0]["printer_status"]["current_temperature"],
+            #       # "material": data[0]["current_print_run"]["material"],
+            #       # "volume_ml": data[0]["current_print_run"]["volume_ml"],
+            #       # "layer_count": data[0]["current_print_run"]["layer_count"],
+            #       # "user": data[0]["current_print_run"]["user"]["username"]
+            #   }
+            #   match data[0]["printer_status"]["status"]:
+            #      case "IDLE":
+            #          print("Printer idle")
+            #          self._attributes = {
+            #              "serial": data[0]["serial"],
+            #              "alias": data[0]["alias"],
+            #          }
+            #      case "PRINTING":
+            #          self._attributes = {
+            #              "serial": data[0]["serial"],
+            #              "alias": data[0]["alias"],
+            #              "material": data[0]["current_print_run"]["material"],
+            #              "volume_ml": data[0]["current_print_run"]["volume_ml"],
+            #              "layer_count": data[0]["current_print_run"]["layer_count"],
+            #              "current_temperature": data[0]["printer_status"]["current_temperature"],
+            #              "user": data[0]["current_print_run"]["user"]["username"],
+            #              "print_thumbnail":data[0]["current_print_run"]["print_thumbnail"]["thumbnail"]
+            #          }
 
     async def async_added_to_hass(self):
         self._unsub = async_track_time_interval(

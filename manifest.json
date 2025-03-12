@@ -1,6 +1,6 @@
 {
   "domain": "formlab",
-  "name": "Form4 sdffsdsdfdfsfssdf 3D Printer",
+  "name": "Form4 3D Printer",
   "documentation": "https://example.com",
   "requirements": ["requests"],
   "dependencies": [],
