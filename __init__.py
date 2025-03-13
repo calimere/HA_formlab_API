@@ -1,31 +1,23 @@
-"""Initialisation du package de l'intégration HACS Tuto"""
-import logging
-
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
+from .const import DOMAIN
 
-from .const import DOMAIN, PLATFORMS
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = entry
 
-_LOGGER = logging.getLogger(__name__)
-
-
-async def async_setup(
-    hass: HomeAssistant, config: ConfigEntry
-):  # pylint: disable=unused-argument
-    """Initialisation de l'intégration"""
-    _LOGGER.info(
-        "Initializing %s integration with plaforms: %s with config: %s",
-        DOMAIN,
-        PLATFORMS,
-        config,
+    # Charger les capteurs pour toutes les imprimantes
+    hass.async_create_task(
+        hass.config_entries.async_forward_entry_setup(entry, "sensor")
     )
 
-    # Mettre ici un eventuel code permettant l'initialisation de l'intégration
-    # Ca peut être une connexion sur le Cloud qui fournit les données par ex
-    # (pas nécessaire pour le tuto)
-
-    # L'argument config contient votre fichier configuration.yaml
-    my_config = config.get(DOMAIN)  # pylint: disable=unused-variable
-
-    # Return boolean to indicate that initialization was successful.
     return True
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+
+    return unload_ok

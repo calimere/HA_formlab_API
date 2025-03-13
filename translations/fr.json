@@ -4,12 +4,12 @@
       "user": {
         "data": {
           "client_id": "ID Client",
-          "client_secret": "Secret Client"
+          "client_secret": "Client Secret"
         }
       }
     },
     "error": {
-      "auth": "Authentication failed, please check yours credentials."
+      "auth": "Echec de l'authentification. Verifiez vos identifiants."
     }
   },
   "title": "Form4 - Integration"

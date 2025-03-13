@@ -1,115 +1,104 @@
 import logging
-import requests
 from datetime import timedelta, datetime
+import requests
+
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.entity import async_generate_entity_id
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 
-CLIENT_ID = "7MPpF5MwR6SFFYBbsisKuGiWrkWAlGGaJrVPnvYG"
-CLIENT_SECRET = "0ns5XlCGIwWnVQvAqTtpU8nN89xCi5UOoy9EvkRZLzGsFeIIJAhx37OCo0Q0qWWlPhZ3dbCWllbPSVhjggehrnhiYwWeic37fx6PIMKRsIe6Z7Mwk2H4U7M64W3zv8mg"
-AUTH_URL = "https://api.formlabs.com/developer/v1/o/token/"
-GET_URL = "https://api.formlabs.com/developer/v1/printers/"
-SCAN_INTERVAL = timedelta(seconds=10)  # Pour le test, on utilise un intervalle court
+from .const import DOMAIN
 
-TOKEN = ""
-EXPIRES = 0
-AUTH_TIME = datetime.now()
-
+SCAN_INTERVAL = timedelta(seconds=10)
 _LOGGER = logging.getLogger(__name__)
 
-def auth_printer():
-    global TOKEN
-    global EXPIRES
-    global AUTH_TIME
+class PrinterAPI:
+    """Classe pour gérer l'API de l'imprimante."""
+    def __init__(self, client_id, client_secret):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.token = None
+        self.token_expiry = None
 
-    headers = {"content-type": "application/x-www-form-urlencoded"}
-    data = {"grant_type": "client_credentials", "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}
-    
-    response = requests.post(AUTH_URL, headers=headers, data=data)
-    
-    if response.status_code == 200:
-        json_data = response.json()
-        TOKEN = json_data.get("access_token")
-        EXPIRES = json_data.get("expires_in")
-        AUTH_TIME = datetime.now()  # Met à jour le temps d'authentification
-    else:
-        _LOGGER.error("Échec de la requête d'authentification: %s", response.text)
+    def authenticate(self):
+        """Récupère un token d'authentification."""
+        headers = {"content-type": "application/x-www-form-urlencoded"}
+        data = {"grant_type": "client_credentials", "client_id": self.client_id, "client_secret": self.client_secret}
+        
+        response = requests.post("https://api.formlabs.com/developer/v1/o/token/", headers=headers, data=data)
+        
+        if response.status_code == 200:
+            json_data = response.json()
+            self.token = json_data.get("access_token")
+            self.token_expiry = datetime.now() + timedelta(seconds=json_data.get("expires_in", 3600) - 60)
+        else:
+            _LOGGER.error("Échec de l'authentification: %s", response.text)
 
-def get_printer_data():
-    try:
-        headers = {"content-type": "application/x-www-form-urlencoded", "Authorization": "Bearer " + TOKEN}
-        response = requests.get(GET_URL, headers=headers)
+    def get_printer_data(self):
+        """Récupère les données de toutes les imprimantes."""
+        if not self.token or datetime.now() >= self.token_expiry:
+            self.authenticate()
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        response = requests.get("https://api.formlabs.com/developer/v1/printers/", headers=headers)
 
         if response.status_code == 200:
             return response.json()
         else:
-            _LOGGER.error("Échec de la requête de données d'imprimante: %s", response.text)
+            _LOGGER.error("Échec de la récupération des données des imprimantes: %s", response.text)
+            return None
 
-    except requests.exceptions.RequestException as e:
-        _LOGGER.error("Erreur de requête: %s", e)
-        return None
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
+    """Configurer plusieurs imprimantes via une entrée de configuration."""
+    client_id = entry.data["client_id"]
+    client_secret = entry.data["client_secret"]
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    async_add_entities([Form4PrinterSensor(hass)], True)
+    api = PrinterAPI(client_id, client_secret)
 
-class Form4PrinterSensor(SensorEntity):
-    def __init__(self, hass):
-        self.hass = hass
-        self._name = "Form4 Printer"
-        self._state = None
-        self._attributes = {}
-        self.entity_id = async_generate_entity_id('sensor.{}', self._name, hass=hass)
+    async def async_update_data():
+        """Met à jour les données de toutes les imprimantes."""
+        return await hass.async_add_executor_job(api.get_printer_data)
 
-    @property
-    def name(self):
-        return self._name
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name="formlabs_printers",
+        update_method=async_update_data,
+        update_interval=SCAN_INTERVAL,
+    )
+
+    await coordinator.async_config_entry_first_refresh()
+
+    if coordinator.data:
+        async_add_entities(Form4PrinterSensor(coordinator, printer) for printer in coordinator.data)
+
+class Form4PrinterSensor(CoordinatorEntity, SensorEntity):
+    """Capteur pour suivre l'état d'une imprimante Form4."""
+
+    def __init__(self, coordinator, printer_data):
+        """Initialise une imprimante spécifique."""
+        super().__init__(coordinator)
+        self.printer_data = printer_data
+        self._attr_name = f"Form4 {printer_data['alias']}"
+        self._attr_unique_id = printer_data["serial"]
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, printer_data["serial"])},
+            name=printer_data["alias"],
+            manufacturer="Formlabs",
+            model="Form 4",
+        )
 
     @property
     def state(self):
-        return self._state
+        """Retourne l'état actuel de l'imprimante."""
+        return self.printer_data["printer_status"]["status"]
 
     @property
     def extra_state_attributes(self):
-        return self._attributes
-
-    async def async_update(self):
-        # Vérifie si le token est vide ou s'il est expiré
-        if not TOKEN or datetime.now() >= (AUTH_TIME + timedelta(seconds=EXPIRES - 60)):
-            await self.hass.async_add_executor_job(auth_printer)  # Authentification asynchrone
-
-        data = await self.hass.async_add_executor_job(get_printer_data)  # Appel de données asynchrone
-        if data:
-            self._state = data[0]["printer_status"]["status"]
-            self._attributes = data[0]
-            #   self._attributes = {
-            #       "serial": data[0]["serial"],
-            #       "alias": data[0]["alias"],
-            #       "current_temperature": data[0]["printer_status"]["current_temperature"],
-            #       # "material": data[0]["current_print_run"]["material"],
-            #       # "volume_ml": data[0]["current_print_run"]["volume_ml"],
-            #       # "layer_count": data[0]["current_print_run"]["layer_count"],
-            #       # "user": data[0]["current_print_run"]["user"]["username"]
-            #   }
-            #   match data[0]["printer_status"]["status"]:
-            #      case "IDLE":
-            #          print("Printer idle")
-            #          self._attributes = {
-            #              "serial": data[0]["serial"],
-            #              "alias": data[0]["alias"],
-            #          }
-            #      case "PRINTING":
-            #          self._attributes = {
-            #              "serial": data[0]["serial"],
-            #              "alias": data[0]["alias"],
-            #              "material": data[0]["current_print_run"]["material"],
-            #              "volume_ml": data[0]["current_print_run"]["volume_ml"],
-            #              "layer_count": data[0]["current_print_run"]["layer_count"],
-            #              "current_temperature": data[0]["printer_status"]["current_temperature"],
-            #              "user": data[0]["current_print_run"]["user"]["username"],
-            #              "print_thumbnail":data[0]["current_print_run"]["print_thumbnail"]["thumbnail"]
-            #          }
-
-    async def async_added_to_hass(self):
-        self._unsub = async_track_time_interval(
-            self.hass, self.async_update, SCAN_INTERVAL
-        )
+        """Retourne des attributs supplémentaires."""
+        return {
+            "serial": self.printer_data["serial"],
+            "alias": self.printer_data["alias"],
+            "current_temperature": self.printer_data["printer_status"]["current_temperature"],
+        }
