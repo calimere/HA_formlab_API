@@ -71,34 +71,181 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     await coordinator.async_config_entry_first_refresh()
 
     if coordinator.data:
-        async_add_entities(Form4PrinterSensor(coordinator, printer) for printer in coordinator.data)
+        async_add_entities(StateSensor(coordinator, printer) for printer in coordinator.data)
+        async_add_entities(CurrentLayerSensor(coordinator, printer) for printer in coordinator.data)
+        async_add_entities(CurrentPrintRunSensor(coordinator, printer) for printer in coordinator.data)
+        async_add_entities(FirmwareSensor(coordinator, printer) for printer in coordinator.data)
+        async_add_entities(CartridgeSensor(coordinator, printer) for printer in coordinator.data)
+        # async_add_entities(BackCartridgeSensor(coordinator, printer) for printer in coordinator.data)
+        
 
-class Form4PrinterSensor(CoordinatorEntity, SensorEntity):
+
+class StateSensor(CoordinatorEntity, SensorEntity):
     """Capteur pour suivre l'état d'une imprimante Form4."""
 
     def __init__(self, coordinator, printer_data):
         """Initialise une imprimante spécifique."""
         super().__init__(coordinator)
         self.printer_data = printer_data
-        self._attr_name = f"Form4 {printer_data['alias']}"
-        self._attr_unique_id = printer_data["serial"]
+        self._attr_name = f"Etat"
+        self._attr_unique_id = f"{printer_data['machine_type_id']}_{printer_data['serial']}_state"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, printer_data["serial"])},
-            name=printer_data["alias"],
+            name=printer_data["serial"],
             manufacturer="Formlabs",
             model="Form 4",
         )
 
     @property
     def state(self):
-        """Retourne l'état actuel de l'imprimante."""
         return self.printer_data["printer_status"]["status"]
 
     @property
     def extra_state_attributes(self):
-        """Retourne des attributs supplémentaires."""
+        return {key: value for key, value in self.printer_data["printer_status"].items() if key not in ["status", "current_print_run"]}
+
+class CurrentLayerSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, printer_data):
+        super().__init__(coordinator)
+        self.printer_data = printer_data
+        self._attr_name = f"Couche"
+        self._attr_unique_id = f"{printer_data['machine_type_id']}_{printer_data['serial']}_current_layer"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, printer_data["serial"])},
+            name=printer_data["serial"],
+            manufacturer="Formlabs",
+            model="Form 4",
+        )
+
+    @property
+    def state(self):
+
+        if self.printer_data["printer_status"]["current_print_run"] != None:
+            current_layer = self.printer_data["printer_status"]["current_print_run"]["currently_printing_layer"]
+            return f"{current_layer}"
+        else:
+            return "N/A"
+
+    @property
+    def extra_state_attributes(self):
         return {
-            "serial": self.printer_data["serial"],
-            "alias": self.printer_data["alias"],
-            "current_temperature": self.printer_data["printer_status"]["current_temperature"],
         }
+
+class CurrentPrintRunSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, printer_data):
+        super().__init__(coordinator)
+        self.printer_data = printer_data
+        self._attr_name = f"Statut de l'impression"
+        self._attr_unique_id = f"{printer_data['machine_type_id']}_{printer_data['serial']}_current_print"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, printer_data["serial"])},
+            name=printer_data["serial"],
+            manufacturer="Formlabs",
+            model="Form 4",
+        )
+
+    @property
+    def state(self):
+
+        if self.printer_data["printer_status"]["current_print_run"] != None:
+            return "En cours"
+        return "N/A"
+
+    @property
+    def extra_state_attributes(self):
+        if self.printer_data["printer_status"]["current_print_run"] != None:
+            return {key: value for key, value in self.printer_data["printer_status"]["current_print_run"].items()}
+        else:
+            return {}
+
+class CartridgeSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, printer_data):
+        super().__init__(coordinator)
+        self.printer_data = printer_data
+        self._attr_name = f"Cartouches"
+        self._attr_unique_id = f"{printer_data['machine_type_id']}_{printer_data['serial']}_front_cartridge"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, printer_data["serial"])},
+            name=printer_data["serial"],
+            manufacturer="Formlabs",
+            model="Form 4",
+        )
+
+    @property
+    def state(self):
+        return ""
+        
+
+    @property
+    def extra_state_attributes(self):
+        cartridge_status = self.printer_data["cartridge_status"]
+        if isinstance(cartridge_status, dict):
+            return {key: value for key, value in cartridge_status.items()}
+        elif isinstance(cartridge_status, list):
+            if len(cartridge_status) == 2:
+                return {
+                    "front_cartridge": cartridge_status[0],
+                    "back_cartridge": cartridge_status[1]
+                }
+            else:
+                return {"cartridge_status": cartridge_status}
+        else:
+            return {}
+
+
+# class BackCartridgeSensor(CoordinatorEntity, SensorEntity):
+#     def __init__(self, coordinator, printer_data):
+#         super().__init__(coordinator)
+#         self.printer_data = printer_data
+#         self._attr_name = f"Cartouche arrière"
+#         self._attr_unique_id = f"{printer_data['machine_type_id']}_{printer_data['serial']}_back_cartridge"
+#         self._attr_device_info = DeviceInfo(
+#             identifiers={(DOMAIN, printer_data["serial"])},
+#             name=printer_data["serial"],
+#             manufacturer="Formlabs",
+#             model="Form 4",
+#         )
+
+#     @property
+#     def state(self):
+
+#         if self.printer_data["cartridge_status"].length > 0:
+#             for cartridge in self.printer_data["cartridge_status"]:
+#                 if cartridge["cartridge_slot"] == "Back":
+#                     return cartridge["cartridge"]["material"]
+#         else :
+#             return "N/A"
+
+
+#     @property
+#     def extra_state_attributes(self):
+#         if self.printer_data["cartridge_status"].length > 0:
+#             for cartridge in self.printer_data["cartridge_status"]:
+#                 if cartridge["cartridge_slot"] == "FRONT":
+#                     return {key: value for key, value in cartridge["cartridge"].items()}
+#         else :
+#             if self.printer_data["cartridge_status"].length == 1:
+#                 return {key: value for key, value in self.printer_data["cartridge_status"][0].items()}
+#             else:
+#                 return "N/A"
+        
+class FirmwareSensor(CoordinatorEntity, SensorEntity):
+    def __init__(self, coordinator, printer_data):
+        super().__init__(coordinator)
+        self.printer_data = printer_data
+        self._attr_name = f"Firmware"
+        self._attr_unique_id = f"{printer_data['machine_type_id']}_{printer_data['serial']}_firmware"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, printer_data["serial"])},
+            name=printer_data["serial"],
+            manufacturer="Formlabs",
+            model="Form 4",
+        )
+
+    @property
+    def state(self):
+        return self.printer_data["firmware_version"]
+
+    @property
+    def extra_state_attributes(self):
+        return {}

@@ -1,6 +1,6 @@
 {
   "domain": "formlab",
-  "name": "Form4 3D Printer",
+  "name": "Formlab 3D Printer",
   "documentation": "https://github.com/calimere/HA_formlab_API",
   "requirements": [ "requests" ],
   "dependencies": [],

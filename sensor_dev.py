@@ -55,13 +55,16 @@ def get_printer_data():
 # Classe modifiée pour tester sans Home Assistant
 class Form4PrinterSensor:
     def __init__(self):
-        self._name = "Form4 Printer"
+        self._name = "Formlabs Printer"
         self._state = None
         self._attributes = {}
 
     def update(self):
 
         data = get_printer_data()
+
+        print({key: value for key, value in data[0]["printer_status"].items() if key not in ["status", "current_print_run"]})
+
         if data:
             self._state = data[0]["printer_status"]["status"]
             self._attributes = {
